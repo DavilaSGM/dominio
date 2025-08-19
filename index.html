@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Dashboard de Vigencias — Dominios y Correo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- PapaParse para CSV robusto -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <!-- Chart.js para gráficas -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root{
+      --ok:#24a148;
+      --warn:#f1c21b;
+      --bad:#da1e28;
+      --muted:#6b7280;
+      --bg:#f8fafc;
+      --card:#ffffff;
+      --ring:#e5e7eb;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Helvetica Neue',Arial,'Noto Sans',sans-serif;background:var(--bg);color:#111827;}
+    header{padding:20px}
+    h1{margin:0 0 6px 0;font-size:24px}
+    .sub{color:var(--muted);font-size:14px}
+    .wrap{max-width:1200px;margin:0 auto;padding:20px;display:grid;gap:16px}
+    .controls, .summary, .charts, .table-card{background:var(--card);border:1px solid var(--ring);border-radius:14px;padding:14px}
+    .controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+    .controls .spacer{flex:1}
+    input[type="text"]{padding:8px 10px;border:1px solid var(--ring);border-radius:10px;min-width:240px}
+    button{border:1px solid var(--ring);background:#fff;padding:8px 12px;border-radius:10px;cursor:pointer}
+    button.active{border-color:#111827;box-shadow:0 0 0 2px #11182722 inset}
+    .badge{display:inline-block;padding:4px 10px;border-radius:999px;font-weight:600;color:white;font-size:13px}
+    .b-ok{background:var(--ok)}
+    .b-warn{background:var(--warn);color:#111827}
+    .b-bad{background:var(--bad)}
+    .grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+    @media (max-width:900px){.grid3{grid-template-columns:1fr}}
+    .kpi{border:1px solid var(--ring);border-radius:12px;padding:12px;background:#fff}
+    .kpi h3{margin:0 0 6px 0;font-size:14px;color:var(--muted)}
+    .kpi .num{font-size:24px;font-weight:700}
+    .charts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+    @media (max-width:900px){.charts{grid-template-columns:1fr}}
+    canvas{max-width:100%;height:320px}
+    table{width:100%;border-collapse:collapse}
+    thead th{position:sticky;top:0;background:#f3f4f6;border-bottom:1px solid var(--ring);text-align:left;padding:10px;font-size:13px}
+    tbody td{border-bottom:1px solid var(--ring);padding:10px;font-size:14px;vertical-align:top}
+    .row-ok{background:#ecfdf5}
+    .row-warn{background:#fffbeb}
+    .row-bad{background:#fef2f2}
+    .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:600}
+    .pill-ok{background:#dcfce7;color:#065f46}
+    .pill-warn{background:#fef3c7;color:#92400e}
+    .pill-bad{background:#fee2e2;color:#991b1b}
+    .muted{color:var(--muted)}
+    .table-card{overflow:auto;max-height:70vh}
+    .hint{font-size:12px;color:var(--muted)}
+  </style>
+</head>
+<body>
+<header>
+  <div class="wrap" style="padding:0">
+    <h1>Dashboard de Vigencias — Dominios y Correo</h1>
+    <div class="sub">Vigencia, estatus y próximos vencimientos. Filtros dinámicos y búsqueda.</div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="controls">
+    <!-- Filtro por tipo -->
+    <div>
+      <strong>Tipo:</strong>
+      <button class="btn-tipo active" data-tipo="Todos">Todos</button>
+      <button class="btn-tipo" data-tipo="Dominio">Dominios</button>
+      <button class="btn-tipo" data-tipo="Correo">Correo</button>
+    </div>
+    <!-- Filtro por estado -->
+    <div>
+      <strong>Estado:</strong>
+      <button class="btn-estado active" data-estado="Todos">Todos</button>
+      <button class="btn-estado" data-estado="Vigente"><span class="badge b-ok">Vigente</span></button>
+      <button class="btn-estado" data-estado="Por vencer"><span class="badge b-warn">Por vencer ≤ 30d</span></button>
+      <button class="btn-estado" data-estado="Vencido"><span class="badge b-bad">Vencido</span></button>
+    </div>
+    <div class="spacer"></div>
+    <input id="q" type="text" placeholder="Buscar por dominio, hosting, detalle…" />
+    <button id="btnClear">Limpiar</button>
+  </section>
+
+  <section class="summary grid3">
+    <div class="kpi">
+      <h3>Total servicios</h3>
+      <div class="num" id="kpiTotal">—</div>
+      <div class="hint" id="kpiFiltroHint"></div>
+    </div>
+    <div class="kpi">
+      <h3>Por vencer (≤ 30 días)</h3>
+      <div class="num"><span id="kpiWarn">—</span> <span class="badge b-warn">atención</span></div>
+      <div class="hint">Considera renovar antes de la fecha.</div>
+    </div>
+    <div class="kpi">
+      <h3>Vencidos</h3>
+      <div class="num"><span id="kpiBad">—</span> <span class="badge b-bad">prioridad</span></div>
+      <div class="hint">Riesgo de interrupción del servicio.</div>
+    </div>
+  </section>
+
+  <section class="charts">
+    <div>
+      <h3 style="margin:0 0 8px 0">Distribución por estado</h3>
+      <canvas id="pie"></canvas>
+    </div>
+    <div>
+      <h3 style="margin:0 0 8px 0">Conteo por estado</h3>
+      <canvas id="bars"></canvas>
+    </div>
+  </section>
+
+  <section class="table-card">
+    <table id="tbl">
+      <thead>
+        <tr id="thead"></tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </section>
+</main>
+
+<script>
+/**
+ * CONFIG
+ * - Por defecto lee la PRIMERA hoja del spreadsheet.
+ * - Si necesitas una hoja específica, publica esa pestaña o agrega &gid=XXXXXXXX.
+ */
+const SHEET_ID = "17zz0socLhBxZTobBi9JxKGeZwH6sus0khHGTdMSp5YU";
+// CSV de la primera hoja
+const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv`;
+
+// Columnas que intentaremos mostrar (con sinónimos). Se muestran si existen.
+const DISPLAY_COLS_ALIASES = {
+  "Servicio / Dominio": ["dominio","servicio","correo","cuenta","nombre","recurso"],
+  "Proveedor / Hosting": ["hosting","proveedor","registrar","reseller","manager"],
+  "Inicio": ["inicio","fecha inicio","alta","start","desde"],
+  "Fin": ["fin","vencimiento","fecha fin","fecha de vencimiento","expira","expiry","hasta"],
+  "Facturación": ["facturación","periodo","periodicidad","ciclo","billing"],
+  "Detalle": ["detalle","observaciones","nota","comentario","descripcion","descripción","notes"],
+  "Tipo": ["tipo","categoria","categoría","class","clase"]
+};
+
+const STATE = {
+  tipo: "Todos",        // Dominio | Correo | Todos
+  estado: "Todos",      // Vigente | Por vencer | Vencido | Todos
+  q: ""                 // búsqueda
+};
+
+let rows = [];          // registros crudos (objetos)
+let keyMap = {};        // normalizado -> key real
+let pieChart = null, barChart = null;
+
+// Helpers
+const norm = s => (s ?? "").toString().trim().toLowerCase();
+const today = new Date(); today.setHours(0,0,0,0);
+
+function parseFecha(raw){
+  const s = (raw ?? "").toString().trim();
+  if(!s) return null;
+  // dd/mm/yyyy o d/m/yy
+  if(/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(s)){
+    let [d,m,y] = s.split("/");
+    if(y.length===2) y = "20"+y;
+    const dt = new Date(+y, +m-1, +d);
+    return isNaN(dt) ? null : dt;
+  }
+  // yyyy-mm-dd (posible con hora)
+  if(/^\d{4}-\d{1,2}-\d{1,2}/.test(s)){
+    const dt = new Date(s);
+    return isNaN(dt) ? null : dt;
+  }
+  // otros formatos: dejar que Date intente
+  const dt = new Date(s);
+  return isNaN(dt) ? null : dt;
+}
+
+function daysBetween(a,b){
+  const ms = a.getTime() - b.getTime();
+  return Math.floor(ms / (1000*60*60*24));
+}
+
+function firstExistingKey(aliases){
+  for(const a of aliases){
+    const k = keyMap[norm(a)];
+    if(k) return k;
+  }
+  return null;
+}
+
+function buildKeyMap(headers){
+  keyMap = {};
+  headers.forEach(h=> keyMap[norm(h)] = h);
+}
+
+function deriveTipo(row){
+  // Intenta columna "Tipo" explícita
+  const tipoKey = firstExistingKey(DISPLAY_COLS_ALIASES["Tipo"]);
+  const val = tipoKey ? (row[tipoKey] ?? "") : "";
+  const v = norm(val);
+  if(v.includes("dominio")) return "Dominio";
+  if(v.includes("correo") || v.includes("mail") || v.includes("email")) return "Correo";
+
+  // Inferir por otras columnas (servicio/detalle)
+  const nameKey = firstExistingKey(DISPLAY_COLS_ALIASES["Servicio / Dominio"]);
+  const detKey = firstExistingKey(DISPLAY_COLS_ALIASES["Detalle"]);
+  const blob = norm(`${nameKey?row[nameKey]:""} ${detKey?row[detKey]:""}`);
+  if(blob.includes("dominio") || blob.match(/\.(com|net|org|mx|io|cloud|biz|info)\b/)) return "Dominio";
+  if(blob.includes("correo") || blob.includes("email") || blob.includes("mail")) return "Correo";
+  return "Otro";
+}
+
+function computeStatus(finDate){
+  if(!finDate) return {label:"Sin fecha", code:"none"};
+  const dleft = daysBetween(finDate, today) * -1; // positivo si falta
+  if(dleft < 0) return {label:"Vencido", code:"bad", days:dleft};
+  if(dleft <= 30) return {label:"Por vencer", code:"warn", days:dleft};
+  return {label:"Vigente", code:"ok", days:dleft};
+}
+
+function loadCSV(){
+  Papa.parse(CSV_URL, {
+    download:true,
+    header:true,
+    skipEmptyLines:true,
+    complete: (res) => {
+      const headers = res.meta.fields || [];
+      buildKeyMap(headers);
+      rows = (res.data || []).filter(r => {
+        // descartar filas totalmente vacías
+        return Object.values(r).some(v => (v ?? "").toString().trim() !== "");
+      });
+      render();
+    },
+    error: (err)=> console.error("Error al leer CSV:", err)
+  });
+}
+
+function filterSort(enriched){
+  // Filtros
+  let list = enriched.filter(it=>{
+    const passTipo = (STATE.tipo==="Todos") || (it.tipo===STATE.tipo);
+    const passEstado = (STATE.estado==="Todos") || (it.status.label===STATE.estado);
+    const q = norm(STATE.q);
+    const searchable = norm([it.nombre, it.proveedor, it.detalle].join(" "));
+    const passQ = !q || searchable.includes(q);
+    return passTipo && passEstado && passQ;
+  });
+
+  // Ordenar por días restantes (vencidos primero)
+  list.sort((a,b)=>{
+    // primero vencidos, luego por vencer, luego vigentes; dentro, menor días restantes
+    const order = {bad:0, warn:1, ok:2, none:3};
+    const oa = order[a.status.code] ?? 9;
+    const ob = order[b.status.code] ?? 9;
+    if(oa!==ob) return oa-ob;
+    const da = a.status.days ?? 99999;
+    const db = b.status.days ?? 99999;
+    return da-db;
+  });
+
+  return list;
+}
+
+function pickDisplayColumns(){
+  const cols = [];
+  for(const label in DISPLAY_COLS_ALIASES){
+    const k = firstExistingKey(DISPLAY_COLS_ALIASES[label]);
+    if(k) cols.push({label, key:k});
+  }
+  // Asegurar que “Fin” esté presente (clave para vigencia)
+  if(!cols.find(c=>c.label==="Fin")){
+    const k = firstExistingKey(DISPLAY_COLS_ALIASES["Fin"]);
+    if(k) cols.push({label:"Fin", key:k});
+  }
+  return cols;
+}
+
+function render(){
+  const nameKey = firstExistingKey(DISPLAY_COLS_ALIASES["Servicio / Dominio"]);
+  const provKey = firstExistingKey(DISPLAY_COLS_ALIASES["Proveedor / Hosting"]);
+  const finKey  = firstExistingKey(DISPLAY_COLS_ALIASES["Fin"]);
+  const detKey  = firstExistingKey(DISPLAY_COLS_ALIASES["Detalle"]);
+
+  // Enriquecer filas
+  const enriched = rows.map(r=>{
+    const fin = parseFecha(finKey ? r[finKey] : "");
+    const status = computeStatus(fin);
+    const tipo = deriveTipo(r);
+    return {
+      raw:r,
+      nombre: nameKey ? (r[nameKey] ?? "") : "",
+      proveedor: provKey ? (r[provKey] ?? "") : "",
+      fin, finRaw: finKey ? (r[finKey] ?? "") : "",
+      detalle: detKey ? (r[detKey] ?? "") : "",
+      tipo,
+      status
+    };
+  });
+
+  const filtered = filterSort(enriched);
+
+  // KPIs
+  const total = filtered.length;
+  const cntBad = filtered.filter(x=>x.status.code==="bad").length;
+  const cntWarn = filtered.filter(x=>x.status.code==="warn").length;
+  document.getElementById("kpiTotal").textContent = total;
+  document.getElementById("kpiBad").textContent = cntBad;
+  document.getElementById("kpiWarn").textContent = cntWarn;
+  document.getElementById("kpiFiltroHint").textContent =
+    `${STATE.tipo} · ${STATE.estado}${STATE.q ? ` · “${STATE.q}”` : ""}`;
+
+  // Charts data
+  const labels = ["Vigente","Por vencer","Vencido"];
+  const data = [
+    filtered.filter(x=>x.status.label==="Vigente").length,
+    filtered.filter(x=>x.status.label==="Por vencer").length,
+    filtered.filter(x=>x.status.label==="Vencido").length
+  ];
+
+  // Pie
+  if(pieChart) pieChart.destroy();
+  pieChart = new Chart(document.getElementById("pie"), {
+    type:"pie",
+    data:{
+      labels,
+      datasets:[{ data, backgroundColor:["#24a148","#f1c21b","#da1e28"] }]
+    },
+    options:{ responsive:true, maintainAspectRatio:false }
+  });
+
+  // Bars
+  if(barChart) barChart.destroy();
+  barChart = new Chart(document.getElementById("bars"), {
+    type:"bar",
+    data:{
+      labels,
+      datasets:[{
+        label:"Servicios",
+        data,
+        backgroundColor:["#24a148","#f1c21b","#da1e28"]
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ display:false } },
+      scales:{ y:{ beginAtZero:true, ticks:{ precision:0 } } }
+    }
+  });
+
+  // Table
+  const thead = document.getElementById("thead");
+  const tbody = document.getElementById("tbody");
+  tbody.innerHTML = "";
+  const cols = pickDisplayColumns();
+
+  // Añadir columnas calculadas (Tipo, Estado, Días restantes)
+  const extraCols = [
+    {label:"Tipo (calculado)", key:"__tipo"},
+    {label:"Estado", key:"__estado"},
+    {label:"Días restantes", key:"__dias"}
+  ];
+
+  thead.innerHTML = [...cols.map(c=>`<th>${c.label}</th>`), ...extraCols.map(c=>`<th>${c.label}</th>`)].join("");
+
+  filtered.forEach(item=>{
+    const tr = document.createElement("tr");
+    tr.classList.add(
+      item.status.code==="ok" ? "row-ok" :
+      item.status.code==="warn" ? "row-warn" :
+      item.status.code==="bad" ? "row-bad" : ""
+    );
+
+    // celdas visibles del sheet
+    for(const c of cols){
+      const v = (c.key && item.raw[c.key] != null) ? String(item.raw[c.key]).trim() : "";
+      const td = document.createElement("td");
+      td.textContent = v || "—";
+      tbody.appendChild(tr);
+      tr.appendChild(td);
+    }
+
+    // columnas calculadas
+    const tdTipo = document.createElement("td");
+    tdTipo.textContent = item.tipo;
+    tr.appendChild(tdTipo);
+
+    const tdEstado = document.createElement("td");
+    const pill = document.createElement("span");
+    pill.className = "pill " + (item.status.code==="ok" ? "pill-ok" :
+                                 item.status.code==="warn" ? "pill-warn" : "pill-bad");
+    pill.textContent = item.status.label;
+    tdEstado.appendChild(pill);
+    tr.appendChild(tdEstado);
+
+    const tdDias = document.createElement("td");
+    if(item.status.code==="none"){
+      tdDias.innerHTML = `<span class="muted">—</span>`;
+    } else {
+      const n = item.status.days;
+      tdDias.textContent = (n != null) ? n : "—";
+    }
+    tr.appendChild(tdDias);
+
+    tbody.appendChild(tr);
+  });
+}
+
+// UI handlers
+document.querySelectorAll(".btn-tipo").forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    document.querySelectorAll(".btn-tipo").forEach(b=>b.classList.remove("active"));
+    btn.classList.add("active");
+    STATE.tipo = btn.dataset.tipo;
+    render();
+  });
+});
+
+document.querySelectorAll(".btn-estado").forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    document.querySelectorAll(".btn-estado").forEach(b=>b.classList.remove("active"));
+    btn.classList.add("active");
+    STATE.estado = btn.dataset.estado;
+    render();
+  });
+});
+
+document.getElementById("q").addEventListener("input", (e)=>{
+  STATE.q = e.target.value;
+  render();
+});
+
+document.getElementById("btnClear").addEventListener("click", ()=>{
+  STATE.tipo = "Todos"; STATE.estado = "Todos"; STATE.q = "";
+  document.getElementById("q").value = "";
+  document.querySelectorAll(".btn-tipo").forEach((b,i)=> b.classList.toggle("active", i===0));
+  document.querySelectorAll(".btn-estado").forEach((b,i)=> b.classList.toggle("active", i===0));
+  render();
+});
+
+// Start
+loadCSV();
+</script>
+</body>
+</html>
