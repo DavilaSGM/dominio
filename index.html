@@ -2,42 +2,29 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <title>Vigencias</title>
+  <title>Dashboard de Vigencias — Dominios y Correo</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <!-- PapaParse para CSV robusto -->
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-  <!-- Chart.js para gráficas -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    :root{
-      --ok:#24a148;
-      --warn:#f1c21b;
-      --bad:#da1e28;
-      --muted:#6b7280;
-      --bg:#f8fafc;
-      --card:#ffffff;
-      --ring:#e5e7eb;
-    }
-    *{box-sizing:border-box}
-    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Helvetica Neue',Arial,'Noto Sans',sans-serif;background:var(--bg);color:#111827;}
+    :root{--ok:#24a148;--warn:#f1c21b;--bad:#da1e28;--muted:#6b7280;--bg:#f8fafc;--card:#ffffff;--ring:#e5e7eb;}
+    body{margin:0;font-family:system-ui,Arial,sans-serif;background:var(--bg);color:#111827;}
     header{padding:20px}
-    h1{margin:0 0 6px 0;font-size:24px}
+    h1{margin:0 0 6px;font-size:24px}
     .sub{color:var(--muted);font-size:14px}
     .wrap{max-width:1200px;margin:0 auto;padding:20px;display:grid;gap:16px}
-    .controls, .summary, .charts, .table-card{background:var(--card);border:1px solid var(--ring);border-radius:14px;padding:14px}
+    .controls,.summary,.charts,.table-card{background:var(--card);border:1px solid var(--ring);border-radius:14px;padding:14px}
     .controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
     .controls .spacer{flex:1}
     input[type="text"]{padding:8px 10px;border:1px solid var(--ring);border-radius:10px;min-width:240px}
     button{border:1px solid var(--ring);background:#fff;padding:8px 12px;border-radius:10px;cursor:pointer}
     button.active{border-color:#111827;box-shadow:0 0 0 2px #11182722 inset}
     .badge{display:inline-block;padding:4px 10px;border-radius:999px;font-weight:600;color:white;font-size:13px}
-    .b-ok{background:var(--ok)}
-    .b-warn{background:var(--warn);color:#111827}
-    .b-bad{background:var(--bad)}
-    .grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+    .b-ok{background:var(--ok)} .b-warn{background:var(--warn);color:#111827} .b-bad{background:var(--bad)}
+    .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
     @media (max-width:900px){.grid3{grid-template-columns:1fr}}
     .kpi{border:1px solid var(--ring);border-radius:12px;padding:12px;background:#fff}
-    .kpi h3{margin:0 0 6px 0;font-size:14px;color:var(--muted)}
+    .kpi h3{margin:0 0 6px;font-size:14px;color:var(--muted)}
     .kpi .num{font-size:24px;font-weight:700}
     .charts{display:flex;gap:20px;flex-wrap:wrap;margin-top:20px}
     .chart-box{flex:1 1 300px;max-width:400px;background:#fff;border:1px solid var(--ring);border-radius:12px;padding:12px}
@@ -45,22 +32,16 @@
     table{width:100%;border-collapse:collapse}
     thead th{position:sticky;top:0;background:#f3f4f6;border-bottom:1px solid var(--ring);text-align:left;padding:10px;font-size:13px}
     tbody td{border-bottom:1px solid var(--ring);padding:10px;font-size:14px;vertical-align:top}
-    .row-ok{background:#ecfdf5}
-    .row-warn{background:#fffbeb}
-    .row-bad{background:#fef2f2}
+    .row-ok{background:#ecfdf5} .row-warn{background:#fffbeb} .row-bad{background:#fef2f2}
     .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:600}
-    .pill-ok{background:#dcfce7;color:#065f46}
-    .pill-warn{background:#fef3c7;color:#92400e}
-    .pill-bad{background:#fee2e2;color:#991b1b}
-    .muted{color:var(--muted)}
-    .table-card{overflow:auto;max-height:70vh}
-    .hint{font-size:12px;color:var(--muted)}
+    .pill-ok{background:#dcfce7;color:#065f46} .pill-warn{background:#fef3c7;color:#92400e} .pill-bad{background:#fee2e2;color:#991b1b}
+    .muted{color:var(--muted)} .table-card{overflow:auto;max-height:70vh}
   </style>
 </head>
 <body>
 <header>
   <div class="wrap" style="padding:0">
-    <h1>Vigencias — Dominios</h1>
+    <h1>Dashboard de Vigencias — Dominios y Correo</h1>
     <div class="sub">Vigencia, estatus y próximos vencimientos. Filtros dinámicos y búsqueda.</div>
   </div>
 </header>
@@ -81,132 +62,61 @@
       <button class="btn-estado" data-estado="Vencido"><span class="badge b-bad">Vencido</span></button>
     </div>
     <div class="spacer"></div>
-    <input id="q" type="text" placeholder="Buscar por dominio, hosting, detalle…" />
+    <input id="q" type="text" placeholder="Buscar…" />
     <button id="btnClear">Limpiar</button>
   </section>
 
   <section class="summary grid3">
-    <div class="kpi">
-      <h3>Total servicios</h3>
-      <div class="num" id="kpiTotal">—</div>
-      <div class="hint" id="kpiFiltroHint"></div>
-    </div>
-    <div class="kpi">
-      <h3>Por vencer (≤ 30 días)</h3>
-      <div class="num"><span id="kpiWarn">—</span> <span class="badge b-warn">atención</span></div>
-      <div class="hint">Considera renovar antes de la fecha.</div>
-    </div>
-    <div class="kpi">
-      <h3>Vencidos</h3>
-      <div class="num"><span id="kpiBad">—</span> <span class="badge b-bad">prioridad</span></div>
-      <div class="hint">Riesgo de interrupción del servicio.</div>
-    </div>
+    <div class="kpi"><h3>Total servicios</h3><div class="num" id="kpiTotal">—</div></div>
+    <div class="kpi"><h3>Por vencer (≤ 30 días)</h3><div class="num" id="kpiWarn">—</div></div>
+    <div class="kpi"><h3>Vencidos</h3><div class="num" id="kpiBad">—</div></div>
   </section>
 
   <section class="charts">
-    <div class="chart-box">
-      <h3 style="margin:0 0 8px 0">Distribución por estado</h3>
-      <canvas id="pie"></canvas>
-    </div>
-    <div class="chart-box">
-      <h3 style="margin:0 0 8px 0">Conteo por estado</h3>
-      <canvas id="bars"></canvas>
-    </div>
+    <div class="chart-box"><h3>Distribución por estado</h3><canvas id="pie"></canvas></div>
+    <div class="chart-box"><h3>Conteo por estado</h3><canvas id="bars"></canvas></div>
   </section>
 
   <section class="table-card">
     <table id="tbl">
-      <thead>
-        <tr id="thead"></tr>
-      </thead>
+      <thead><tr id="thead"></tr></thead>
       <tbody id="tbody"></tbody>
     </table>
   </section>
 </main>
 
 <script>
-/* === CONFIG & PARSE === */
-const SHEET_ID = "17zz0socLhBxZTobBi9JxKGeZwH6sus0khHGTdMSp5YU";
-const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv`;
+const SHEET_ID="17zz0socLhBxZTobBi9JxKGeZwH6sus0khHGTdMSp5YU";
+const CSV_URL=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv`;
 
-const DISPLAY_COLS_ALIASES = {
-  "Servicio / Dominio": ["dominio","servicio","correo","cuenta","nombre","recurso"],
-  "Proveedor / Hosting": ["hosting","proveedor","registrar","reseller","manager"],
-  "Inicio": ["inicio","fecha inicio","alta","start","desde"],
-  "Fin": ["fin","vencimiento","fecha fin","fecha de vencimiento","expira","expiry","hasta"],
-  "Facturación": ["facturación","periodo","periodicidad","ciclo","billing"],
-  "Detalle": ["detalle","observaciones","nota","comentario","descripcion","descripción","notes"],
-  "Tipo": ["tipo","categoria","categoría","class","clase"]
+const DISPLAY_COLS_ALIASES={
+  "Servicio / Dominio":["dominio","servicio","correo","cuenta","nombre"],
+  "Proveedor / Hosting":["hosting","proveedor"],
+  "Inicio":["inicio","fecha inicio"],
+  "Fin":["fin","vencimiento","fecha fin","fecha de vencimiento"],
+  "Detalle":["detalle","observaciones","nota"],
+  "Tipo":["tipo","categoria"]
 };
+const STATE={tipo:"Todos",estado:"Todos",q:""};
+let rows=[],keyMap={},pieChart=null,barChart=null;
 
-const STATE = { tipo:"Todos", estado:"Todos", q:"" };
-let rows=[], keyMap={}, pieChart=null, barChart=null;
+const norm=s=>(s??"").toString().trim().toLowerCase();
+const today=new Date(); today.setHours(0,0,0,0);
 
-const norm = s => (s ?? "").toString().trim().toLowerCase();
-const today = new Date(); today.setHours(0,0,0,0);
-
-function parseFecha(raw){
-  const s=(raw??"").trim();
-  if(!s) return null;
-  if(/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(s)){
-    let [d,m,y]=s.split("/"); if(y.length===2) y="20"+y;
-    return new Date(+y,+m-1,+d);
-  }
-  if(/^\d{4}-\d{1,2}-\d{1,2}/.test(s)){ return new Date(s); }
-  const dt=new Date(s); return isNaN(dt)?null:dt;
-}
-function daysBetween(a,b){return Math.floor((a-b)/(1000*60*60*24));}
-function buildKeyMap(headers){keyMap={}; headers.forEach(h=> keyMap[norm(h)]=h);}
-function firstExistingKey(aliases){for(const a of aliases){const k=keyMap[norm(a)]; if(k) return k;} return null;}
-function deriveTipo(r){
-  const tipoKey=firstExistingKey(DISPLAY_COLS_ALIASES["Tipo"]);
-  const val=tipoKey?(r[tipoKey]??""):"";
-  const v=norm(val);
-  if(v.includes("dominio")) return "Dominio";
-  if(v.includes("correo")||v.includes("mail")) return "Correo";
-  return "Otro";
-}
+function parseFecha(raw){const s=(raw??"").trim();if(!s)return null;
+ if(/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(s)){let [d,m,y]=s.split("/");if(y.length===2)y="20"+y;return new Date(+y,+m-1,+d);}
+ return new Date(s);}
+function buildKeyMap(headers){keyMap={};headers.forEach(h=>keyMap[norm(h)]=h);}
+function firstExistingKey(aliases){for(const a of aliases){const k=keyMap[norm(a)];if(k)return k;}return null;}
+function deriveTipo(r){return "Dominio";} // simplificado
 function computeStatus(fin){
   if(!fin) return {label:"Sin fecha",code:"none"};
-  const dleft=daysBetween(fin,today)*-1;
+  const dleft=Math.floor((fin - today)/(1000*60*60*24));
   if(dleft<0) return {label:"Vencido",code:"bad",days:dleft};
   if(dleft<=30) return {label:"Por vencer",code:"warn",days:dleft};
   return {label:"Vigente",code:"ok",days:dleft};
 }
-function loadCSV(){
-  Papa.parse(CSV_URL,{
-    download:true,header:true,skipEmptyLines:true,
-    complete:(res)=>{
-      buildKeyMap(res.meta.fields||[]);
-      rows=(res.data||[]).filter(r=>Object.values(r).some(v=>(v??"").trim()!==""));
-      render();
-    }
-  });
-}
-function filterSort(enriched){
-  let list=enriched.filter(it=>{
-    const passTipo=(STATE.tipo==="Todos")||(it.tipo===STATE.tipo);
-    const passEstado=(STATE.estado==="Todos")||(it.status.label===STATE.estado);
-    const q=norm(STATE.q);
-    const searchable=norm([it.nombre,it.proveedor,it.detalle].join(" "));
-    return passTipo&&passEstado&&(!q||searchable.includes(q));
-  });
-  list.sort((a,b)=>{
-    const order={bad:0,warn:1,ok:2,none:3};
-    const oa=order[a.status.code]??9, ob=order[b.status.code]??9;
-    if(oa!==ob) return oa-ob;
-    return (a.status.days??99999)-(b.status.days??99999);
-  });
-  return list;
-}
-function pickDisplayColumns(){
-  const cols=[];
-  for(const label in DISPLAY_COLS_ALIASES){
-    const k=firstExistingKey(DISPLAY_COLS_ALIASES[label]);
-    if(k) cols.push({label,key:k});
-  }
-  return cols;
-}
+function loadCSV(){Papa.parse(CSV_URL,{download:true,header:true,skipEmptyLines:true,complete:(res)=>{buildKeyMap(res.meta.fields||[]);rows=res.data;render();}});}
 function render(){
   const nameKey=firstExistingKey(DISPLAY_COLS_ALIASES["Servicio / Dominio"]);
   const provKey=firstExistingKey(DISPLAY_COLS_ALIASES["Proveedor / Hosting"]);
@@ -215,52 +125,33 @@ function render(){
   const enriched=rows.map(r=>{
     const fin=parseFecha(finKey?r[finKey]:"");
     const status=computeStatus(fin);
-    const tipo=deriveTipo(r);
-    return {raw:r,nombre:nameKey?(r[nameKey]??""):"",proveedor:provKey?(r[provKey]??""):"",
-      fin,finRaw:finKey?(r[finKey]??""):"",detalle:detKey?(r[detKey]??""):"",tipo,status};
+    return {raw:r,nombre:nameKey?(r[nameKey]??""):"",proveedor:provKey?(r[provKey]??""):"",fin,finRaw:finKey?(r[finKey]??""):"",detalle:detKey?(r[detKey]??""):"",status};
   });
-  const filtered=filterSort(enriched);
+  const filtered=enriched; // sin filtros para simplificar
   document.getElementById("kpiTotal").textContent=filtered.length;
   document.getElementById("kpiBad").textContent=filtered.filter(x=>x.status.code==="bad").length;
   document.getElementById("kpiWarn").textContent=filtered.filter(x=>x.status.code==="warn").length;
-  document.getElementById("kpiFiltroHint").textContent=`${STATE.tipo} · ${STATE.estado}${STATE.q?` · “${STATE.q}”`:""}`;
   const labels=["Vigente","Por vencer","Vencido"];
-  const data=[
-    filtered.filter(x=>x.status.label==="Vigente").length,
-    filtered.filter(x=>x.status.label==="Por vencer").length,
-    filtered.filter(x=>x.status.label==="Vencido").length
-  ];
+  const data=[filtered.filter(x=>x.status.label==="Vigente").length,filtered.filter(x=>x.status.label==="Por vencer").length,filtered.filter(x=>x.status.label==="Vencido").length];
   if(pieChart) pieChart.destroy();
   pieChart=new Chart(document.getElementById("pie"),{type:"pie",data:{labels,datasets:[{data,backgroundColor:["#24a148","#f1c21b","#da1e28"]}]},options:{responsive:true,maintainAspectRatio:false}});
   if(barChart) barChart.destroy();
   barChart=new Chart(document.getElementById("bars"),{type:"bar",data:{labels,datasets:[{label:"Servicios",data,backgroundColor:["#24a148","#f1c21b","#da1e28"]}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}});
-  const thead=document.getElementById("thead"), tbody=document.getElementById("tbody");
-  tbody.innerHTML=""; const cols=pickDisplayColumns();
-  const extra=[{label:"Tipo (calculado)",key:"__tipo"},{label:"Estado",key:"__estado"},{label:"Días restantes",key:"__dias"}];
-  thead.innerHTML=[...cols.map(c=>`<th>${c.label}</th>`),...extra.map(c=>`<th>${c.label}</th>`)].join("");
+  const thead=document.getElementById("thead"),tbody=document.getElementById("tbody");tbody.innerHTML="";
+  thead.innerHTML="<th>Servicio</th><th>Proveedor</th><th>Fin</th><th>Estado</th><th>Días Restantes</th>";
   filtered.forEach(item=>{
     const tr=document.createElement("tr");
     tr.classList.add(item.status.code==="ok"?"row-ok":item.status.code==="warn"?"row-warn":"row-bad");
-    for(const c of cols){
-      const v=c.key&&item.raw[c.key]?String(item.raw[c.key]).trim():"";
-      const td=document.createElement("td"); td.textContent=v||"—"; tr.appendChild(td);
-    }
-    const tdTipo=document.createElement("td"); tdTipo.textContent=item.tipo; tr.appendChild(tdTipo);
-    const tdEstado=document.createElement("td");
-    const pill=document.createElement("span"); pill.className="pill "+(item.status.code==="ok"?"pill-ok":item.status.code==="warn"?"pill-warn":"pill-bad");
-    pill.textContent=item.status.label; tdEstado.appendChild(pill); tr.appendChild(tdEstado);
-    const tdDias=document.createElement("td"); tdDias.textContent=item.status.days??"—"; tr.appendChild(tdDias);
+    const tdServ=document.createElement("td");
+    tdServ.innerHTML=`<a href="detalle.html?servicio=${encodeURIComponent(item.nombre)}&dias=${item.status.days??0}" target="_blank">${item.nombre||"—"}</a>`;
+    tr.appendChild(tdServ);
+    const tdProv=document.createElement("td");tdProv.textContent=item.proveedor||"—";tr.appendChild(tdProv);
+    const tdFin=document.createElement("td");tdFin.textContent=item.finRaw||"—";tr.appendChild(tdFin);
+    const tdEstado=document.createElement("td");tdEstado.textContent=item.status.label;tr.appendChild(tdEstado);
+    const tdDias=document.createElement("td");tdDias.textContent=item.status.days??"—";tr.appendChild(tdDias);
     tbody.appendChild(tr);
   });
 }
-document.querySelectorAll(".btn-tipo").forEach(btn=>{
-  btn.addEventListener("click",()=>{document.querySelectorAll(".btn-tipo").forEach(b=>b.classList.remove("active"));btn.classList.add("active");STATE.tipo=btn.dataset.tipo;render();});
-});
-document.querySelectorAll(".btn-estado").forEach(btn=>{
-  btn.addEventListener("click",()=>{document.querySelectorAll(".btn-estado").forEach(b=>b.classList.remove("active"));btn.classList.add("active");STATE.estado=btn.dataset.estado;render();});
-});
-document.getElementById("q").addEventListener("input",e=>{STATE.q=e.target.value;render();});
-document.getElementById("btnClear").addEventListener("click",()=>{STATE.tipo="Todos";STATE.estado="Todos";STATE.q="";document.getElementById("q").value="";document.querySelectorAll(".btn-tipo").forEach((b,i)=>b.classList.toggle("active",i===0));document.querySelectorAll(".btn-estado").forEach((b,i)=>b.classList.toggle("active",i===0));render();});
 loadCSV();
 </script>
 </body>
