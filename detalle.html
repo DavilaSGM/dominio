@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Detalle de Servicio</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; text-align: center; }
+    #gauge { max-width: 400px; margin: 20px auto; }
+    h2 { margin-bottom: 20px; }
+  </style>
+</head>
+<body>
+  <h2 id="titulo"></h2>
+  <canvas id="gauge"></canvas>
+
+<script>
+const params=new URLSearchParams(window.location.search);
+const servicio=params.get("servicio")||"Servicio";
+const dias=parseInt(params.get("dias"),10)||0;
+document.getElementById("titulo").textContent=`${servicio} — ${dias} días restantes`;
+
+const mesActual=new Date().getMonth(); // 0=enero
+
+new Chart(document.getElementById("gauge"),{
+  type:'doughnut',
+  data:{
+    labels:["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"],
+    datasets:[{
+      data:Array(12).fill(1),
+      backgroundColor:[
+        "#24a148","#24a148","#24a148","#24a148",
+        "#f1c21b","#f1c21b","#f1c21b","#f1c21b",
+        "#da1e28","#da1e28","#da1e28","#da1e28"
+      ],
+      borderWidth:1,
+      circumference:180,
+      rotation:-90
+    }]
+  },
+  options:{cutout:"70%",plugins:{legend:{display:true,position:"bottom"},tooltip:{enabled:false}}},
+  plugins:[{
+    id:'needle',
+    afterDatasetDraw(chart){
+      const {ctx,chartArea:{width,height}}=chart;
+      ctx.save();
+      const angle=Math.PI*(mesActual/12);
+      const cx=chart.width/2;
+      const cy=chart.height-10;
+      const len=(height/2)-20;
+      ctx.beginPath();
+      ctx.moveTo(cx,cy);
+      ctx.lineTo(cx+len*Math.cos(angle),cy+len*Math.sin(angle));
+      ctx.lineWidth=3;
+      ctx.strokeStyle="#000";
+      ctx.stroke();
+      ctx.restore();
+    }
+  }]
+});
+</script>
+</body>
+</html>
